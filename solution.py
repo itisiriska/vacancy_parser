@@ -106,8 +106,9 @@ class VacancySplitter:
         return
 
     def predict(self, data):
-        X_test = self.vect.transform(data)
+        X_test = self.vect.transform(data['responsibilities_bigrams'])
         data['predict'] = self.model.predict(X_test)
+        data.index = data['id']
 
         v_ids = np.unique(data['id'])
         valid_df = pd.DataFrame(index=v_ids, columns=['id', 'responsibilities'])
