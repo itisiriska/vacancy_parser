@@ -10,7 +10,6 @@ from nltk.util import ngrams
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
-
 tqdm.pandas()
 nlp = spacy.load('ru_core_news_sm')
 stop_words = stopwords.words('russian')
@@ -32,6 +31,7 @@ class VacancySplitter:
         super().__init__()
         self.vect = TfidfVectorizer(preprocessor=lambda x: x, tokenizer=lambda x: x)
         self.model = LogisticRegression(random_state=RANDOM_STATE, max_iter=500, n_jobs=-1)
+        self.path = ''
 
     def _intersection(self, b1, b_list):
         for b2 in b_list:
@@ -60,11 +60,13 @@ class VacancySplitter:
         res_df = pd.DataFrame()
         res_df['responsibilities_bigrams'] = list(ngrams(df_slice['responsibilities_cleaned'], 4))
         res_df['id'] = df_slice['id']
-        res_df['class'] = res_df['responsibilities_bigrams'].apply(lambda x: self._map_ngrams(x, req_bigrams, terms_bigrams))
+        res_df['class'] = res_df['responsibilities_bigrams'].apply(
+            lambda x: self._map_ngrams(x, req_bigrams, terms_bigrams))
 
         return res_df[['id', 'responsibilities_bigrams', 'class']]
 
     def preprocess_excel(self, path):
+        self.path = path
         df_clf = pd.read_excel(path)
         df_clf['responsibilities(Должностные обязанности)'] = df_clf['responsibilities(Должностные обязанности)'].apply(
             lambda x: str.lower(str(x)) if not pd.isna(x) else x
@@ -105,5 +107,47 @@ class VacancySplitter:
 
     def predict(self, data):
         X_test = self.vect.transform(data)
-        pred = self.model.predict(X_test)
-        return pred
+        data['predict'] = self.model.predict(X_test)
+
+        v_ids = np.unique(data['id'])
+        valid_df = pd.DataFrame(index=v_ids, columns=['id', 'responsibilities'])
+        valid_df['id'] = valid_df.index
+        valid_df['reqiurements'] = valid_df['id'].apply(lambda x: self._get_phrases(data, x, 0))
+        valid_df['terms'] = valid_df['id'].apply(lambda x: self._get_phrases(data, x, 1))
+
+        return valid_df
+
+    def _get_phrases(self, data, id_, cls):
+        vacancy = data.loc[id_]
+        bigrams = vacancy[vacancy['predict'] == cls]['responsibilities_bigrams'].to_list()
+
+        phrases = []
+        for i in range(1, len(bigrams)):
+            phrase = ' '.join(bigrams[i - 1])
+            curr_ngram = bigrams[i - 1]
+            next_ngram = bigrams[i]
+            while curr_ngram[3] == next_ngram[2] and i < len(bigrams):
+                curr_ngram = bigrams[i - 1]
+                next_ngram = bigrams[i]
+                phrase += f' {next_ngram[3]}'
+                i += 1
+            phrases.append(phrase)
+
+        return '\n'.join(self._validate(phrases))
+
+    def _validate(self, phrases):
+        validated_phrases = []
+
+        if len(phrases) == 2 and phrases[0].find(phrases[1]) != -1:
+            validated_phrases.append(phrases[0])
+            return validated_phrases
+        elif len(phrases) < 2 or len(phrases) == 2 and phrases[0].find(phrases[1]) == -1:
+            return phrases
+
+        for i in reversed(range(len(phrases) - 1)):
+            if phrases[i].find(phrases[i + 1]) == -1:
+                validated_phrases.append(phrases[i + 1])
+            if i == 0 and not validated_phrases:
+                validated_phrases.append(phrases[i])
+
+        return validated_phrases
