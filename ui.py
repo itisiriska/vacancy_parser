@@ -28,7 +28,8 @@ def get_data(event):
 def get_missing_values(event):
     data = pd.read_excel('Датасет.xlsx')
     data.index = data['id']
-    missing_vals = data.loc[predict.index][['responsibilities(Должностные обязанности)']]
+    test = pd.read_pickle('test.pkl')
+    missing_vals = data.loc[test['id'].unique()][['responsibilities(Должностные обязанности)']]
 
     missing_vals[['requirements(Требования к соискателю)', 'terms(Условия)']] = np.nan
     df_bundle_info.value = missing_vals
@@ -39,10 +40,10 @@ def get_missing_values(event):
 
 
 def run_model(event):
+    data = pd.read_excel('Датасет.xlsx')
+    data.index = data['id']
     vs = VacancySplitter()
     df_train = pd.read_pickle("train.pkl")
-    # data = pd.read_excel('Датасет.xlsx')
-    # data.index = data['id']
     vs.train(df_train['responsibilities_bigrams'], df_train['class'])
     test = pd.read_pickle('test.pkl')
     predict = vs.predict(test)

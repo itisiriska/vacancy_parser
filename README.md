@@ -4,7 +4,7 @@
 
 ### Установка нужных библиотек:
 
-```pip install requirements.txt``` - установка зависимостей
+```pip install -r requirements.txt``` - установка зависимостей
 
 ```python -m nltk.downloader stopwords``` - загрузка стоп-слов nltk
 
